@@ -74,6 +74,7 @@ def plot_acquisition(bounds,input_dim,model,Xdata,Ydata,acquisition_function,sug
 
         if filename!=None:
             savefig(filename)
+            plt.close()
         else:
             plt.show()
 

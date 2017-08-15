@@ -94,6 +94,7 @@ class BO(object):
         self.suggested_sample = self.X
         self.Y_new = self.Y
 
+        ran_optimisation = False
 
         # --- Initialize time cost of the evaluations
         while (self.max_time > self.cum_time):
@@ -107,19 +108,21 @@ class BO(object):
             # --- Update and optimize acquisition and compute the exploration level in the next evaluation
             self.suggested_sample = self._compute_next_evaluations()
             
-            if not ((self.num_acquisitions < self.max_iter) and (self._distance_last_evaluations() > self.eps)): 
+            if not ((self.num_acquisitions < self.max_iter) and (self._distance_last_evaluations() > self.eps)):
                 break
+
 
             # --- Augment X
             self.X = np.vstack((self.X,self.suggested_sample))
-            
+
             # --- Evaluate *f* in X, augment Y and update cost function (if needed)
             self.evaluate_objective()
 
             # --- Update current evaluation time and function evaluations
-            self.cum_time = time.time() - self.time_zero  
+            self.cum_time = time.time() - self.time_zero
             self.num_acquisitions += 1
-                
+            ran_optimisation = True
+
    
         # --- Stop messages and execution time   
         self._compute_results()
@@ -131,6 +134,7 @@ class BO(object):
             self.save_evaluations(self.evaluations_file)
         if self.models_file != None:  
             self.save_models(self.models_file)
+        return ran_optimisation
 
 
     def _print_convergence(self):
@@ -162,6 +166,17 @@ class BO(object):
         self.Y_new, cost_new = self.objective.evaluate(self.suggested_sample)
         self.cost.update_cost_model(self.suggested_sample, cost_new)
         self.Y = np.vstack((self.Y,self.Y_new))
+
+    def add_new_point(self, new_X, new_Y):
+        self.X = np.vstack((self.X, new_X))
+        self.Y = np.vstack((self.Y, new_Y))
+        self.Y_new = self.Y
+        self.num_acquisitions += 1
+
+    def remove_last_point(self):
+        self.X = self.X[:-1]
+        self.Y  = self.Y[:-1]
+        self.num_acquisitions -= 1
 
     def _compute_results(self):
         """

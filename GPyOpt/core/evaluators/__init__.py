@@ -6,6 +6,8 @@ from .sequential import Sequential
 from .batch_random import RandomBatch
 from .batch_predictive import Predictive
 from .batch_local_penalization import LocalPenalization
+from .adversarial import Adversarial
+from .target import Target
 
 def select_evaluator(name):
     if name == 'sequential':
@@ -16,5 +18,9 @@ def select_evaluator(name):
         return Predictive
     elif name == 'local_penalization':
         return LocalPenalization
+    elif name == 'adversarial':
+        return Adversarial
+    elif name == 'target':
+        return Target
     else:
         raise Exception('Invalid acquisition evaluator selected.')

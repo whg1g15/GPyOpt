@@ -4,13 +4,13 @@
 import GPy
 import numpy as np
 import time
-from ..acquisitions import AcquisitionEI, AcquisitionMPI, AcquisitionLCB, AcquisitionEI_MCMC, AcquisitionMPI_MCMC, AcquisitionLCB_MCMC, AcquisitionLP
+from ..acquisitions import AcquisitionEI, AcquisitionMPI, AcquisitionLCB, AcquisitionEI_MCMC, AcquisitionMPI_MCMC, AcquisitionLCB_MCMC, AcquisitionLP, AcquisitionUCB
 from ..core.bo import BO
 from ..core.task.space import Design_space, bounds_to_space
 from ..core.task.objective import SingleObjective
 from ..core.task.cost import CostModel
 from ..util.general import samples_multidimensional_uniform, reshape, evaluate_function
-from ..core.evaluators import Sequential, RandomBatch, Predictive, LocalPenalization
+from ..core.evaluators import Sequential, RandomBatch, Predictive, LocalPenalization, Adversarial, Target
 from ..util.stats import initial_design
 from ..models.gpmodel import GPModel, GPModel_MCMC
 from ..models.rfmodel import RFModel
@@ -75,7 +75,7 @@ class BayesianOptimization(BO):
     def __init__(self, f, domain = None, constrains = None, cost_withGradients = None, model_type = 'GP', X = None, Y = None,
     	initial_design_numdata = None, initial_design_type='random', acquisition_type ='EI', normalize_Y = True,
         exact_feval = False, acquisition_optimizer_type = 'lbfgs', model_update_interval=1, evaluator_type = 'sequential',
-        batch_size = 1, num_cores = 1, verbosity= True, verbosity_model = False, bounds=None, maximize=False, **kwargs):
+        batch_size = 1, num_cores = 1, verbosity= True, verbosity_model = False, bounds=None, maximize=False, other_model=None, **kwargs):
 
         self.modular_optimization = False
 
@@ -221,9 +221,10 @@ class BayesianOptimization(BO):
             else:
                 self.acquisition = self._acquisition_chooser()
         else:
-            self.acquisition = self.acquisition = self._acquisition_chooser()
+            self.acquisition = self._acquisition_chooser()
 
 
+        self.other_model = other_model
         # --- CHOOSE evaluator method
         self.evaluator_type = evaluator_type
         self.evaluator = self._evaluator_chooser()
@@ -352,6 +353,10 @@ class BayesianOptimization(BO):
         elif self.acquisition_type =='LCB_MCMC':
             return AcquisitionLCB_MCMC(self.model, self.space, self.acquisition_optimizer, self.cost.cost_withGradients, self.acquisition_weight)
 
+        elif self.acquisition_type == 'UCB':
+            return AcquisitionUCB(self.model, self.space, self.acquisition_optimizer, self.cost.cost_withGradients,
+                                  self.acquisition_weight)
+
         else:
             raise Exception('Invalid acquisition selected.')
 
@@ -378,8 +383,12 @@ class BayesianOptimization(BO):
         else:
             self.acquisition_transformation = 'none'
 
-        if self.batch_size == 1 or self.evaluator_type == 'sequential':
+        if self.batch_size == 1 and self.evaluator_type == 'sequential':
             return Sequential(self.acquisition)
+        elif self.batch_size == 1 and self.evaluator_type == 'adversarial':
+            return Adversarial(self.acquisition, other_model=self.other_model)
+        elif self.batch_size == 1 and self.evaluator_type == 'target':
+            return Target(self.acquisition, other_model=self.other_model)
 
         elif self.batch_size >1 and (self.evaluator_type == 'random' or self.evaluator_type == None):
             return RandomBatch(self.acquisition, self.batch_size)
@@ -455,7 +464,7 @@ class BayesianOptimization(BO):
             elif kwargs['acqu_optimize_method'] =='CMA':
                 self.acquisition_optimizer.optimizer ='CMA'
             print('WARNING: "acqu_optimize_method" will be deprecated in the next version!')
-        super(BayesianOptimization, self).run_optimization(max_iter = max_iter, max_time = max_time,  eps = eps, verbosity=verbosity, save_models_parameters = save_models_parameters, report_file = report_file, evaluations_file= evaluations_file, models_file=models_file)
+        return super(BayesianOptimization, self).run_optimization(max_iter = max_iter, max_time = max_time,  eps = eps, verbosity=verbosity, save_models_parameters = save_models_parameters, report_file = report_file, evaluations_file= evaluations_file, models_file=models_file)
 
     def _sign(self,f):
         if self.maximize:
